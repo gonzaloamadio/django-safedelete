@@ -8,7 +8,7 @@ from django.db import models
 from django.test import override_settings
 
 from ..models import SafeDeleteModel
-from ..config import SOFT_DELETE_CASCADE
+from ..config import SOFT_DELETE_CASCADE, SOFT_DELETE_CASCADE_ALL
 from .testcase import SafeDeleteForceTestCase
 
 
@@ -119,6 +119,23 @@ class SoftDeleteTestCase(SafeDeleteForceTestCase):
         self.assertEqual(SoftDeleteRelatedModel.objects.count(), 0)
 
         SoftDeleteModel.deleted_objects.all().undelete(force_policy=SOFT_DELETE_CASCADE)
+        self.assertEqual(SoftDeleteModel.objects.count(), 1)
+        # After timestamp check added (deleted element should have same tstamp as parent to be undeleted), this changed
+        # As they were not deleted at the same time, the undeletion does not undelete related object (despite it is)
+        self.assertEqual(SoftDeleteRelatedModel.objects.count(), 0)
+
+    def test_undelete_with_soft_delete_policy_and_forced_soft_delete_all_cascade_policy(self):
+        self.assertEqual(SoftDeleteModel.objects.count(), 1)
+        SoftDeleteRelatedModel.objects.create(related=SoftDeleteModel.objects.first())
+        self.assertEqual(SoftDeleteRelatedModel.objects.count(), 1)
+
+        SoftDeleteModel.objects.all().delete()
+        self.assertEqual(SoftDeleteModel.objects.count(), 0)
+
+        SoftDeleteRelatedModel.objects.all().delete()
+        self.assertEqual(SoftDeleteRelatedModel.objects.count(), 0)
+
+        SoftDeleteModel.deleted_objects.all().undelete(force_policy=SOFT_DELETE_CASCADE_ALL)
         self.assertEqual(SoftDeleteModel.objects.count(), 1)
         self.assertEqual(SoftDeleteRelatedModel.objects.count(), 1)
 

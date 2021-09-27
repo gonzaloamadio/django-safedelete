@@ -1,9 +1,11 @@
 from django.db import models
 from django.test import TestCase
-from safedelete import SOFT_DELETE_CASCADE, SOFT_DELETE
+from safedelete import SOFT_DELETE_CASCADE, SOFT_DELETE, SOFT_DELETE_CASCADE_ALL
 from safedelete.models import SafeDeleteModel
 from safedelete.signals import pre_softdelete
 from safedelete.tests.models import Article, Author, Category
+
+from ..config import FIELD_NAME
 
 
 try:
@@ -151,3 +153,86 @@ class SimpleTest(TestCase):
         self.assertEqual(Article.objects.count(), 3)
         self.assertEqual(Category.objects.count(), 3)
         self.assertEqual(Press.objects.count(), 1)
+
+    def test_soft_delete_cascade_set_same_timestamp_to_all_deleted_elements(self):
+        press = Press.objects.create(name='press 1', article=self.articles[1])
+
+        id_ar1 = self.articles[0].id
+        id_ar2 = self.articles[1].id
+        id_au = self.authors[1].id
+        id_press = press.id
+        self.assertEqual(Author.objects.count(), 3)
+        self.assertEqual(Article.objects.count(), 3)
+        self.assertEqual(Category.objects.count(), 3)
+        self.assertEqual(Press.objects.count(), 2)
+
+        self.authors[1].delete(force_policy=SOFT_DELETE_CASCADE)
+
+        timestamp = getattr(Author.all_objects.get(id=id_au), FIELD_NAME)
+        self.assertEqual(getattr(Article.all_objects.get(id=id_ar1), FIELD_NAME), timestamp)
+        self.assertEqual(getattr(Article.all_objects.get(id=id_ar2), FIELD_NAME), timestamp)
+        self.assertEqual(getattr(Press.all_objects.get(id=id_press), FIELD_NAME), timestamp)
+
+        # Count all objects
+        self.assertEqual(Author.all_objects.count(), 3)
+        self.assertEqual(Article.all_objects.count(), 3)
+        self.assertEqual(Category.all_objects.count(), 3)
+        self.assertEqual(Category.objects.count(), 3)
+        self.assertEqual(Press.all_objects.count(), 2)
+
+        # Count without deleted
+        self.assertEqual(Author.objects.count(), 2)         # 1 author deleted
+        self.assertEqual(Article.objects.count(), 1)        # 2 articles were deleted
+        self.assertEqual(Press.objects.count(), 1)          # 1 press deleted
+
+    def test_soft_delete_cascade_undelete_only_undelete_deleted_elements_on_same_operation(self):
+        id_ar2 = self.articles[1].id
+
+        # Check we have 2 articles related to the author
+        self.assertEqual(len(self.authors[1].article_set.all()), 2)
+
+        self.articles[0].delete(force_policy=SOFT_DELETE)
+
+        # Check we have 1 article1 related to the author after deleting one
+        self.assertEqual(len(self.authors[1].article_set.all()), 1)
+        # And check is the one that is not deleted
+        self.authors[1].article_set.get(id=id_ar2)
+
+        # This should delete cascade self.articles[1]
+        self.authors[1].delete(force_policy=SOFT_DELETE_CASCADE)
+        self.authors[1].undelete(force_policy=SOFT_DELETE_CASCADE)
+
+        # Check that we only undeleted the article that was deleted along the author
+        self.assertEqual(len(self.authors[1].article_set.all()), 1)
+        # And check is the one that is not deleted
+        self.authors[1].article_set.get(id=id_ar2)
+
+        self.assertEqual(Article.all_objects.count(), 3)
+        self.assertEqual(Article.objects.count(), 2)
+
+    def test_soft_delete_cascade_undelete_all_related_elements_with_all_policy(self):
+        id_ar2 = self.articles[1].id
+        id_ar1 = self.articles[0].id
+
+        # Check we have 2 articles related to the author
+        self.assertEqual(len(self.authors[1].article_set.all()), 2)
+
+        self.articles[0].delete(force_policy=SOFT_DELETE)
+
+        # Check we have 1 article1 related to the author after deleting one
+        self.assertEqual(len(self.authors[1].article_set.all()), 1)
+        # And check is the one that is not deleted
+        self.authors[1].article_set.get(id=id_ar2)
+
+        # This should delete cascade self.articles[1]
+        self.authors[1].delete(force_policy=SOFT_DELETE_CASCADE)
+        self.authors[1].undelete(force_policy=SOFT_DELETE_CASCADE_ALL)
+
+        # Check all related articles were restored
+        self.assertEqual(len(self.authors[1].article_set.all()), 2)
+        # And check they are the original ones
+        self.authors[1].article_set.get(id=id_ar2)
+        self.authors[1].article_set.get(id=id_ar1)
+
+        self.assertEqual(Article.all_objects.count(), 3)
+        self.assertEqual(Article.objects.count(), 3)

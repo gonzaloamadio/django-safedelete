@@ -1,4 +1,5 @@
 import warnings
+from django.utils import timezone
 
 from django.contrib.admin.utils import NestedObjects
 from django.db import models, router
@@ -9,6 +10,7 @@ from .config import (
     NO_DELETE,
     SOFT_DELETE,
     SOFT_DELETE_CASCADE,
+    SOFT_DELETE_CASCADE_ALL,
     FIELD_NAME,
     HAS_BOOLEAN_FIELD,
     BOOLEAN_FIELD_NAME,
@@ -124,10 +126,21 @@ class SafeDeleteModel(models.Model):
         """
         current_policy = force_policy or self._safedelete_policy
 
+        # Get the objects deletion time, so we can undelete related objects that were deleted at same time (see README)
+        timestamp = getattr(self, FIELD_NAME)
+
         assert_is_deleted(self)
         self.save(keep_deleted=False, **kwargs)
 
         if current_policy == SOFT_DELETE_CASCADE:
+            for related in related_objects(self):
+                # if is_safedelete_cls(related.__class__) and getattr(related, FIELD_NAME):
+                if is_safedelete_cls(related.__class__) \
+                        and getattr(related, FIELD_NAME) \
+                        and getattr(related, FIELD_NAME) == timestamp:  # was deleted along self?
+                    related.undelete()
+        # In case we want to undelete all related elements no matter if they were deleted all together with the parent
+        elif current_policy == SOFT_DELETE_CASCADE_ALL:
             for related in related_objects(self):
                 if is_safedelete_cls(related.__class__) and getattr(related, FIELD_NAME):
                     related.undelete()
@@ -136,7 +149,7 @@ class SafeDeleteModel(models.Model):
         # To know why we need to do that, see https://github.com/makinacorpus/django-safedelete/issues/117
         self._delete(force_policy, **kwargs)
 
-    def _delete(self, force_policy=None, **kwargs):
+    def _delete(self, force_policy=None, timestamp=None, **kwargs):
         """Overrides Django's delete behaviour based on the model's delete policy.
 
         Args:
@@ -151,9 +164,8 @@ class SafeDeleteModel(models.Model):
             return
 
         elif current_policy == SOFT_DELETE:
-
             # Only soft-delete the object, marking it as deleted.
-            mark_object_as_deleted(self)
+            mark_object_as_deleted(self, timestamp)
             using = kwargs.get('using') or router.db_for_write(self.__class__, instance=self)
             # send pre_softdelete signal
             pre_softdelete.send(sender=self.__class__, instance=self, using=using)
@@ -176,13 +188,15 @@ class SafeDeleteModel(models.Model):
                 self._delete(force_policy=HARD_DELETE, **kwargs)
 
         elif current_policy == SOFT_DELETE_CASCADE:
+            # Set this timestamp for all elements that are going to be deleted in this cascade delete.
+            ts = timezone.now()
             # Soft-delete on related objects before
             for related in related_objects(self):
                 if is_safedelete_cls(related.__class__) and not getattr(related, FIELD_NAME):
-                    related.delete(force_policy=SOFT_DELETE, **kwargs)
+                    related.delete(force_policy=SOFT_DELETE, timestamp=ts, **kwargs)
 
             # soft-delete the object
-            self._delete(force_policy=SOFT_DELETE, **kwargs)
+            self._delete(force_policy=SOFT_DELETE, timestamp=ts, **kwargs)
 
             collector = NestedObjects(using=router.db_for_write(self))
             collector.collect([self])

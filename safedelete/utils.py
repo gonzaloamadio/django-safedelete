@@ -26,11 +26,15 @@ def can_hard_delete(obj):
     return not bool(list(related_objects(obj)))
 
 
-def mark_object_as_deleted(obj):
+def mark_object_as_deleted(obj, timestamp=None):
     """Set safedelete fields with values that make an object be marked as deleted.
     Be aware of always setting both fields, so the values are in a consistent state.
+
+    :param obj: object to be marked as deleted
+    :param timestamp datetime: value for deleted_at field
     """
-    setattr(obj, FIELD_NAME, timezone.now())
+    ts = timestamp or timezone.now()
+    setattr(obj, FIELD_NAME, ts)
     if HAS_BOOLEAN_FIELD:
         setattr(obj, BOOLEAN_FIELD_NAME, True)
 

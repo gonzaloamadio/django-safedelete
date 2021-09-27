@@ -18,6 +18,8 @@ and would like to continue using them.
 
 So, if this is the case, you can configure this repo to do so. Check comments on `config.py` file.
 
+There is also an extra delete/undelete logic added. See section `delete/undelete logic` in this README
+for more information.
 
 What is it ?
 ------------
@@ -152,6 +154,26 @@ in the settings of the project where you install this repo:
     SAFE_DELETE_USE_BOOLEAN_FIELD_TO_DO_LOGIC = True
 
 
+Delete/Undelete logic
+-------------------------
+In the original repository every time a delete operation is performed, the deleted_at field is set
+with the value of timezone.now(). This implies that every element has a different timestamp, and if we want to undo an
+undelete, but rolling back only elements that were deleted on the same operation, it would not be possible.
+
+Scenario and original behaviour: Assume we have an element `A` and two elements `B` and `C` that have a FK to `A`, and suppose
+we do a delete on element `C`. Now we are going to have element `A` and `B` (pointing to `A`). Now we `delete` `A`,
+and that operation will delete `B` as well (cascade deletion). If we `undelete` ` A`, then both `B` and `C` will be
+undeleted (as they both have a FK to A).
+
+New requirements:
+We would like to modified this behaviour and be able to undelete elements that were deleted within the cascade deletion.
+
+In this package, we have modified the original behaviour to meet the new requirements:
+Set same timestamp to all deleted elements in order to rollback in an easy way related deleted elements.
+
+For the undelete, if you want to bypass this check and undelete all related elements use the policy:
+`some_object.undelete(force_policy=SOFT_DELETE_CASCADE_ALL)`
+
 Documentation
 -------------
 
@@ -164,11 +186,3 @@ Licensing
 ---------
 
 Please see the LICENSE file.
-
-Contacts
---------
-
-Please see the AUTHORS file.
-
-.. image:: https://drupal.org/files/imagecache/grid-3/Logo_slogan_300dpi.png
-    :target: http://www.makina-corpus.com
