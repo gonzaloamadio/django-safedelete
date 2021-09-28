@@ -10,7 +10,7 @@ from .config import (
     NO_DELETE,
     SOFT_DELETE,
     SOFT_DELETE_CASCADE,
-    SOFT_DELETE_CASCADE_ALL,
+    SOFT_UNDELETE_CASCADE_ALL,
     FIELD_NAME,
     HAS_BOOLEAN_FIELD,
     BOOLEAN_FIELD_NAME,
@@ -134,13 +134,12 @@ class SafeDeleteModel(models.Model):
 
         if current_policy == SOFT_DELETE_CASCADE:
             for related in related_objects(self):
-                # if is_safedelete_cls(related.__class__) and getattr(related, FIELD_NAME):
                 if is_safedelete_cls(related.__class__) \
                         and getattr(related, FIELD_NAME) \
                         and getattr(related, FIELD_NAME) == timestamp:  # was deleted along self?
                     related.undelete()
         # In case we want to undelete all related elements no matter if they were deleted all together with the parent
-        elif current_policy == SOFT_DELETE_CASCADE_ALL:
+        elif current_policy == SOFT_UNDELETE_CASCADE_ALL:
             for related in related_objects(self):
                 if is_safedelete_cls(related.__class__) and getattr(related, FIELD_NAME):
                     related.undelete()

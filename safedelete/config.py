@@ -5,7 +5,7 @@ SOFT_DELETE = 1
 SOFT_DELETE_CASCADE = 2
 HARD_DELETE_NOCASCADE = 3
 NO_DELETE = 4
-SOFT_DELETE_CASCADE_ALL = 5  # only used in undelete
+SOFT_UNDELETE_CASCADE_ALL = 5  # only used in undelete
 
 DELETED_INVISIBLE = 10
 DELETED_VISIBLE_BY_FIELD = DELETED_VISIBLE_BY_PK = 11
@@ -21,4 +21,5 @@ BOOLEAN_FIELD_NAME = getattr(settings, 'SAFE_DELETE_BOOLEAN_FIELD_NAME', 'is_del
 # IF you would like to filter for deleted elements using the boolean field instead of checking if the datetime field
 # is not set, set this variable to True.
 # This is specially useful if you have indexes on the boolean field at DB level.
+# NOTE!! If this is True, then HAS_BOOLEAN_FIELD must be true
 USE_BOOLEAN_FIELD = getattr(settings, 'SAFE_DELETE_USE_BOOLEAN_FIELD_TO_DO_LOGIC', False)
